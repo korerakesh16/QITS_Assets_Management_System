@@ -23,26 +23,48 @@ def send_email(to_email: str, subject: str, body_html: str) -> bool:
         print("[Email Service] SMTP credentials not configured.")
         return False
 
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = to_email
+
+    html_part = MIMEText(body_html, "html")
+    msg.attach(html_part)
+
+    # 1. If port 465 is explicitly configured, connect via SSL
+    if smtp_port == 465:
+        try:
+            server = smtplib.SMTP_SSL(smtp_host, 465, timeout=10)
+            server.login(smtp_user, smtp_password)
+            server.sendmail(from_email, [to_email], msg.as_string())
+            server.quit()
+            print(f"[Email Service] Successfully sent email to {to_email} via SSL Port 465: '{subject}'")
+            return True
+        except Exception as e:
+            print(f"[Email Service Error] Failed via SSL Port 465 to {to_email}: {e}")
+            return False
+
+    # 2. Try configured port (typically 587 with STARTTLS). If Render blocks port 587, auto-fallback to SSL Port 465
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = from_email
-        msg["To"] = to_email
-
-        html_part = MIMEText(body_html, "html")
-        msg.attach(html_part)
-
-        # Connect to SMTP server
         server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
         server.starttls()
         server.login(smtp_user, smtp_password)
         server.sendmail(from_email, [to_email], msg.as_string())
         server.quit()
-        print(f"[Email Service] Successfully sent email to {to_email}: '{subject}'")
+        print(f"[Email Service] Successfully sent email to {to_email} via Port {smtp_port}: '{subject}'")
         return True
-    except Exception as e:
-        print(f"[Email Service Error] Failed to send email to {to_email}: {e}")
-        return False
+    except Exception as e587:
+        print(f"[Email Service Warning] Connection via Port {smtp_port} failed ({e587}). Attempting Port 465 SSL fallback...")
+        try:
+            server = smtplib.SMTP_SSL(smtp_host, 465, timeout=10)
+            server.login(smtp_user, smtp_password)
+            server.sendmail(from_email, [to_email], msg.as_string())
+            server.quit()
+            print(f"[Email Service] Successfully sent email to {to_email} via Port 465 SSL Fallback: '{subject}'")
+            return True
+        except Exception as e465:
+            print(f"[Email Service Error] Both Port {smtp_port} and Port 465 SSL failed for {to_email}: {e465}")
+            return False
 
 def send_email_async(to_email: str, subject: str, body_html: str):
     """

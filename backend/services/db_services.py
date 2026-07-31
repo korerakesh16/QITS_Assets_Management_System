@@ -551,7 +551,20 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
     try:
         from services.email_service import send_email_async
         from app.config import settings
-        admin_email = getattr(settings, "SMTP_USER", "helloquad05@gmail.com")
+        # Collect recipient emails for Admin notification (DB Admins + default SMTP_USER)
+        admin_emails = set()
+        default_admin = getattr(settings, "SMTP_USER", "helloquad05@gmail.com")
+        if default_admin:
+            admin_emails.add(default_admin)
+        
+        try:
+            admin_rows = db.execute(text("SELECT email FROM employees WHERE role = 'Admin' AND email IS NOT NULL AND email != ''")).all()
+            for r in admin_rows:
+                if r.email:
+                    admin_emails.add(r.email)
+        except Exception as e_adm:
+            print(f"[create_repair] Warning: Failed fetching DB admin emails: {e_adm}")
+
         email_subject = f"[QITS Ticket {rep_id}] {notif_title}"
         email_body = f"""
         <html>
@@ -573,11 +586,12 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
           </body>
         </html>
         """
-        send_email_async(admin_email, email_subject, email_body)
+        for admin_email in admin_emails:
+            send_email_async(admin_email, email_subject, email_body)
 
-        # Also send confirmation email to Employee if email exists
+        # Also send confirmation email to Employee if email exists and not already sent
         emp = db.execute(text("SELECT email FROM employees WHERE id = :id"), {"id": rep_data['reported_by']}).first()
-        if emp and emp.email and emp.email != admin_email:
+        if emp and emp.email and emp.email not in admin_emails:
             emp_subject = f"[QITS Ticket {rep_id}] Ticket Submitted Successfully"
             emp_body = f"""
             <html>
