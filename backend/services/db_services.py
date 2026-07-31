@@ -1,18 +1,51 @@
 from typing import Optional, List, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from models import Employee, Asset, Category, License, Repair, RepairUpdate, Announcement, Guideline, Notification, ActivityLog
 from services.auth_service import get_password_hash
 
 # --- UTILITIES: ACTIVITY LOGS & NOTIFICATIONS ---
 
+def format_relative_time(created_at: Optional[datetime], static_time: Optional[str] = None) -> str:
+    if not created_at:
+        return static_time or "Just now"
+    
+    now = datetime.now(timezone.utc)
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+        
+    diff = now - created_at
+    seconds = diff.total_seconds()
+    
+    if seconds < 60:
+        return "Just now"
+    elif seconds < 3600:
+        mins = int(seconds // 60)
+        return f"{mins} min ago" if mins == 1 else f"{mins} mins ago"
+    elif seconds < 86400:
+        hours = int(seconds // 3600)
+        return f"{hours} hour ago" if hours == 1 else f"{hours} hours ago"
+    elif seconds < 2592000:
+        days = int(seconds // 86400)
+        return f"{days} day ago" if days == 1 else f"{days} days ago"
+    else:
+        months = int(seconds // 2592000)
+        return f"{months} month ago" if months == 1 else f"{months} months ago"
+
+
 def log_activity(db: Session, user: str, activity: str, details: str, ip_address: str = "192.168.1.10"):
     now_str = datetime.now().strftime("%d %b %Y, %I:%M %p")
-    # Generate unique ID
+    # Generate unique ID safely
     count = db.execute(text("SELECT COUNT(*) FROM activity_log")).scalar() or 0
-    act_id = f"ACT{str(count + 1).zfill(3)}"
+    n = count + 1
+    while True:
+        act_id = f"ACT{str(n).zfill(3)}"
+        exists = db.execute(text("SELECT id FROM activity_log WHERE id = :id"), {"id": act_id}).first()
+        if not exists:
+            break
+        n += 1
     
     query = text("""
         INSERT INTO activity_log (id, "user", activity, details, ip_address, date_time)
@@ -120,12 +153,32 @@ def update_employee(db: Session, emp_id: str, emp_data: dict, operator_name: str
 
 def delete_employee(db: Session, emp_id: str, operator_name: str):
     employee = get_employee_by_id(db, emp_id)
-    if employee:
+    if not employee:
+        return False
+    try:
+        # Unassign assets assigned to this employee and reset status
+        db.execute(
+            text("UPDATE assets SET assigned_to = NULL, status = 'Available', assigned_date = 'N/A' WHERE assigned_to = :id"),
+            {"id": emp_id}
+        )
+        # Clear reported_by reference in repairs
+        db.execute(
+            text("UPDATE repairs SET reported_by = NULL WHERE reported_by = :id"),
+            {"id": emp_id}
+        )
+        # Delete employee notifications
+        db.execute(
+            text("DELETE FROM notifications WHERE employee_id = :id"),
+            {"id": emp_id}
+        )
+        # Delete employee record
         db.execute(text("DELETE FROM employees WHERE id = :id"), {"id": emp_id})
         db.commit()
         log_activity(db, operator_name, "Delete Employee", f"Deleted employee {emp_id}")
         return True
-    return False
+    except Exception as e:
+        db.rollback()
+        raise e
 
 def change_employee_password(db: Session, emp_id: str, new_password: str):
     hashed = get_password_hash(new_password)
@@ -447,15 +500,24 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
         "message": "Repair request created."
     })
     
-    # Update asset status to Under Repair
-    db.execute(text("UPDATE assets SET status = 'Under Repair' WHERE id = :asset_id"), {"asset_id": rep_data["asset_id"]})
+    # Update asset status to Under Repair only if not a new asset request
+    if rep_data.get("asset_id") and not str(rep_data.get("issue", "")).startswith("New Asset Request"):
+        db.execute(text("UPDATE assets SET status = 'Under Repair' WHERE id = :asset_id"), {"asset_id": rep_data["asset_id"]})
     
     db.commit()
     log_activity(db, operator_name, "Create Repair", f"Created repair request {rep_id} for asset {rep_data['asset_id']}")
+    
+    if str(rep_data.get("issue", "")).startswith("New Asset Request"):
+        notif_title = "New IT Equipment Ticket Raised"
+        notif_msg = f"New Ticket {rep_id} raised by {operator_name}: '{rep_data['issue']}'"
+    else:
+        notif_title = "New Support Ticket Raised"
+        notif_msg = f"Ticket {rep_id} raised by {operator_name} for asset {rep_data['asset_id']}: '{rep_data['issue']}'"
+
     create_notification(
         db,
-        "New Support Ticket Raised",
-        f"Ticket {rep_id} raised by {operator_name} for asset {rep_data['asset_id']}: '{rep_data['issue']}'",
+        notif_title,
+        notif_msg,
         "warning",
         None
     )
@@ -643,7 +705,13 @@ def get_notifications(db: Session, emp_id: Optional[str] = None):
         sql += " OR employee_id = :emp_id"
         params["emp_id"] = emp_id
     sql += " ORDER BY created_at DESC"
-    return db.execute(text(sql), params).all()
+    rows = db.execute(text(sql), params).mappings().all()
+    result = []
+    for r in rows:
+        item = dict(r)
+        item["time"] = format_relative_time(item.get("created_at"), item.get("time"))
+        result.append(item)
+    return result
 
 def mark_notification_read(db: Session, notif_id: str):
     db.execute(text("UPDATE notifications SET read = TRUE WHERE id = :id"), {"id": notif_id})

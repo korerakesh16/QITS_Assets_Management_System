@@ -112,7 +112,7 @@ const Login = () => {
           </div>
           <div className="text-center">
             <h2 className="text-xl font-bold text-slate-800 tracking-tight">Quadrant IT Services</h2>
-            <p className="text-xs text-slate-500 font-semibold mt-1">Management &amp; Employee Portal</p>
+            <p className="text-xs text-slate-500 font-semibold mt-1">Asset Management Portal</p>
           </div>
         </div>
 
@@ -126,7 +126,11 @@ const Login = () => {
         )}
 
         {/* Credentials Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+          {/* Hidden dummy inputs to block aggressive browser autofill */}
+          <input type="text" name="prevent_autofill_user" id="prevent_autofill_user" style={{ display: 'none' }} tabIndex="-1" autoComplete="off" />
+          <input type="password" name="prevent_autofill_pass" id="prevent_autofill_pass" style={{ display: 'none' }} tabIndex="-1" autoComplete="new-password" />
+
           <div className="space-y-1">
             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Email Address</label>
             <div className="relative">
@@ -135,6 +139,9 @@ const Login = () => {
               </span>
               <input
                 type="text"
+                name="qits_login_email"
+                id="qits_login_email"
+                autoComplete="off"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 placeholder="Email"
@@ -151,6 +158,9 @@ const Login = () => {
               </span>
               <input
                 type={showPassword ? 'text' : 'password'}
+                name="qits_login_password"
+                id="qits_login_password"
+                autoComplete="new-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Password"

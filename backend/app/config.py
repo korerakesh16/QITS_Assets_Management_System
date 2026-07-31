@@ -3,11 +3,19 @@ from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    DATABASE_URL: str 
-    JWT_SECRET: str = ""
-    JWT_ALGORITHM: str = "
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 
-    CORS_ORIGINS: str = 
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/postgres"
+    JWT_SECRET: str = "qits_secret_key_change_me_in_production_1234567890"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:3000,https://qitsassetmanagement.vercel.app,https://qits-asset-management.vercel.app"
+    
+    # SMTP Email Configuration
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = "helloquad05@gmail.com"
+    SMTP_PASSWORD: str = "helloquad05"
+    SMTP_FROM_EMAIL: str = "noreply@qits.com"
+    EMAILS_ENABLED: bool = True
 
     @property
     def cors_origins_list(self) -> List[str]:

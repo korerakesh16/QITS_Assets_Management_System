@@ -142,6 +142,18 @@ const EmployeeDashboard = () => {
       return;
     }
 
+    const targetAssetId = myAssignedAssets[0]?.id || assets[0]?.id || "LT0001";
+    const newRepair = {
+      assetId: targetAssetId,
+      reportedBy: currentUser.id,
+      issue: `New Asset Request: ${newAssetType}`,
+      description: `Requested new asset type: ${newAssetType}. Priority: ${newAssetPriority}. Justification: ${newAssetReason.trim()}`,
+      priority: newAssetPriority,
+      assignedTo: "IT Support Team",
+      estimatedCompletion: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString()
+    };
+
+    addRepair(newRepair);
     logActivity("Request Asset", `Requested new asset type: ${newAssetType}. Justification: ${newAssetReason}`);
     showToast(`Your request for a new ${newAssetType} has been logged and sent to IT Admin for approval.`);
 

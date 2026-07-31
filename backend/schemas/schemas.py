@@ -40,8 +40,37 @@ class EmployeeBase(CamelModel):
     joining_date: Optional[str] = None
     location: Optional[str] = "Hyderabad, India"
 
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+import re
+
 class EmployeeCreate(EmployeeBase):
     password: Optional[str] = None
+
+    @field_validator('id')
+    @classmethod
+    def validate_employee_id(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not re.match(r'^[A-Z0-9_-]{3,20}$', v):
+            raise ValueError('Employee ID must be between 3 and 20 alphanumeric characters (e.g. QEMP001, EMP101, 121234)')
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            clean_v = re.sub(r'\D', '', v)
+            if len(clean_v) != 10:
+                raise ValueError('Phone number must be exactly 10 digits')
+            return clean_v
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def validate_email_domain(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v):
+            raise ValueError('Please enter a valid email address (e.g. employee@quadrantitservices.com)')
+        return v
 
 class EmployeeUpdate(CamelModel):
     name: Optional[str] = None
@@ -55,6 +84,16 @@ class EmployeeUpdate(CamelModel):
     avatar: Optional[str] = None
     joining_date: Optional[str] = None
     location: Optional[str] = None
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            clean_v = re.sub(r'\D', '', v)
+            if len(clean_v) != 10:
+                raise ValueError('Phone number must be exactly 10 digits')
+            return clean_v
+        return v
 
 class EmployeeOut(EmployeeBase):
     created_at: Optional[datetime] = None

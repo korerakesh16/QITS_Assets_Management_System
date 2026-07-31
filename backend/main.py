@@ -1,6 +1,8 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from database.connection import SessionLocal, Base, engine
 from database.seeding import seed_database
 from app.config import settings
@@ -58,8 +60,7 @@ app.include_router(notifications_router)
 app.include_router(activity_router)
 app.include_router(dashboard_router)
 
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
@@ -71,9 +72,17 @@ async def validation_exception_handler(request, exc):
     except Exception:
         body = await request.body()
         print("Request Raw Body:", body)
+    
+    formatted_errors = jsonable_encoder(exc.errors())
+    error_msgs = []
+    for err in formatted_errors:
+        msg = err.get("msg", "Validation error").replace("Value error, ", "")
+        error_msgs.append(msg)
+    detail_str = "; ".join(error_msgs) if error_msgs else "Validation error"
+
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()}
+        content={"detail": detail_str, "errors": formatted_errors}
     )
 
 @app.get("/")

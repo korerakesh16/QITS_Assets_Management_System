@@ -122,11 +122,11 @@ def seed_database(db: Session):
     if not any(e["id"] == "EMP1005" for e in seed_employees):
         seed_employees.append({
             "id": "EMP1005",
-            "name": "Rakesh Reddy",
+            "name": "Rakesh kore",
             "department": "IT Development",
             "designation": "Software Developer",
-            "email": "rakesh.reddy@company.com",
-            "username": "rakesh.reddy",
+            "email": "rakesh.kore@company.com",
+            "username": "rakesh.kore",
             "phone": "+91 98765 43210",
             "status": "Active",
             "role": "Employee",
