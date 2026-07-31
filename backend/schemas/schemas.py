@@ -234,7 +234,7 @@ class RepairUpdateOut(CamelModel):
 
 class RepairOut(CamelModel):
     id: str
-    asset_id: str
+    asset_id: Optional[str] = None
     reported_by: Optional[str] = None
     issue: str
     description: Optional[str] = None
