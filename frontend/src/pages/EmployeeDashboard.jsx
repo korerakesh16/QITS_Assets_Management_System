@@ -141,9 +141,8 @@ const EmployeeDashboard = () => {
       return;
     }
 
-    const targetAssetId = myAssignedAssets[0]?.id || assets[0]?.id || null;
     const newRepair = {
-      assetId: targetAssetId,
+      assetId: null,
       reportedBy: currentUser.id,
       issue: `New Asset Request: ${newAssetType}`,
       description: `Requested new asset type: ${newAssetType}. Priority: ${newAssetPriority}. Justification: ${newAssetReason.trim()}`,

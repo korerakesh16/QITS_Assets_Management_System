@@ -217,7 +217,7 @@ class RepairUpdateSchema(CamelModel):
     message: str
 
 class RepairCreate(CamelModel):
-    asset_id: str
+    asset_id: Optional[str] = None
     reported_by: str
     issue: str
     description: Optional[str] = ""

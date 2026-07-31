@@ -530,7 +530,7 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
     db.commit()
     log_activity(db, operator_name, "Create Repair", f"Created repair request {rep_id} for asset {valid_asset_id or 'General Request'}")
     
-    is_new_asset = str(rep_data.get("issue", "")).startswith("New Asset Request")
+    is_new_asset = str(rep_data.get("issue", "")).startswith("New Asset Request") or "new ticket" in str(rep_data.get("issue", "")).lower() or "request new" in str(rep_data.get("issue", "")).lower()
     if is_new_asset:
         notif_title = "New IT Equipment Ticket Raised"
         notif_msg = f"New Ticket {rep_id} raised by {operator_name}: '{rep_data['issue']}'"
@@ -578,7 +578,7 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
               <p><strong>Raised By:</strong> {operator_name} (Employee ID: {rep_data['reported_by']})</p>
               <p><strong>Issue / Item:</strong> {rep_data['issue']}</p>
               <p><strong>Priority:</strong> {rep_data.get('priority', 'Medium')}</p>
-              <p><strong>Description:</strong> {rep_data.get('description', 'N/A')}</p>
+              <p><strong>Description / Details:</strong> {rep_data.get('description', 'N/A')}</p>
               <p><strong>Request Date (IST):</strong> {req_date}</p>
               <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
               <p style="font-size: 12px; color: #64748b;">This is an automated notification from Quadrant IT Services Management System.</p>
@@ -589,10 +589,10 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
         for admin_email in admin_emails:
             send_email_async(admin_email, email_subject, email_body)
 
-        # Also send confirmation email to Employee if email exists and not already sent
+        # Send confirmation email to Employee if email exists
         emp = db.execute(text("SELECT email FROM employees WHERE id = :id"), {"id": rep_data['reported_by']}).first()
-        if emp and emp.email and emp.email not in admin_emails:
-            emp_subject = f"[QITS Ticket {rep_id}] Ticket Submitted Successfully"
+        if emp and emp.email:
+            emp_subject = f"[QITS Ticket {rep_id}] Ticket Submitted Successfully ({notif_title})"
             emp_body = f"""
             <html>
               <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
@@ -602,8 +602,11 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
                 <div style="padding: 20px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
                   <h3 style="color: #16a34a;">Ticket Submission Received</h3>
                   <p>Hello {operator_name},</p>
-                  <p>Your support request (Ticket ID: <strong>{rep_id}</strong>) has been successfully logged. Our IT Support team has been notified and will review your request shortly.</p>
-                  <p><strong>Summary:</strong> {rep_data['issue']}</p>
+                  <p>Your ticket request (Ticket ID: <strong>{rep_id}</strong>) has been successfully logged. Our IT Support team has been notified and will review your request shortly.</p>
+                  <p><strong>Ticket Category:</strong> {notif_title}</p>
+                  <p><strong>Summary / Requested Item:</strong> {rep_data['issue']}</p>
+                  <p><strong>Priority:</strong> {rep_data.get('priority', 'Medium')}</p>
+                  <p><strong>Description:</strong> {rep_data.get('description', 'N/A')}</p>
                   <p><strong>Status:</strong> In Progress / Awaiting Review</p>
                   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
                   <p style="font-size: 12px; color: #64748b;">Quadrant IT Services Asset Management System</p>
