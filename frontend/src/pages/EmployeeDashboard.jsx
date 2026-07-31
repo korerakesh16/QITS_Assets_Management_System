@@ -103,10 +103,10 @@ const EmployeeDashboard = () => {
   const openRequestsCount = myRepairs.filter(r => r.status === 'In Progress' || r.status === 'Pending' || r.status === 'Awaiting Parts').length;
   const totalRequestsCount = myRepairs.length;
 
-  const handleRaiseSubmit = (e) => {
+  const handleRepairSubmit = async (e) => {
     e.preventDefault();
     if (!repairAssetId) {
-      showToast("Please select a device.", "error");
+      showToast("Please select an asset.", "error");
       return;
     }
     if (!repairIssue.trim()) {
@@ -124,7 +124,7 @@ const EmployeeDashboard = () => {
       estimatedCompletion: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString() // 5 days from now
     };
 
-    addRepair(newRepair);
+    await addRepair(newRepair);
     showToast("Repair request successfully submitted to the IT Support Desk!");
 
     // Reset form
@@ -135,14 +135,14 @@ const EmployeeDashboard = () => {
     setActiveModal(null);
   };
 
-  const handleRequestAssetSubmit = (e) => {
+  const handleRequestAssetSubmit = async (e) => {
     e.preventDefault();
     if (!newAssetReason.trim()) {
       showToast("Please enter the justification reason.", "error");
       return;
     }
 
-    const targetAssetId = myAssignedAssets[0]?.id || assets[0]?.id || "LT0001";
+    const targetAssetId = myAssignedAssets[0]?.id || assets[0]?.id || null;
     const newRepair = {
       assetId: targetAssetId,
       reportedBy: currentUser.id,
@@ -153,7 +153,7 @@ const EmployeeDashboard = () => {
       estimatedCompletion: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString()
     };
 
-    addRepair(newRepair);
+    await addRepair(newRepair);
     logActivity("Request Asset", `Requested new asset type: ${newAssetType}. Justification: ${newAssetReason}`);
     showToast(`Your request for a new ${newAssetType} has been logged and sent to IT Admin for approval.`);
 

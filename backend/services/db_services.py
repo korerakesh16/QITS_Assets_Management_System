@@ -62,24 +62,34 @@ def log_activity(db: Session, user: str, activity: str, details: str, ip_address
     db.commit()
 
 def create_notification(db: Session, title: str, message: str, notif_type: str, employee_id: Optional[str] = None):
-    # Generate unique ID
-    count = db.execute(text("SELECT COUNT(*) FROM notifications")).scalar() or 0
-    notif_id = f"NT{str(count + 1).zfill(3)}"
-    
-    query = text("""
-        INSERT INTO notifications (id, title, message, time, read, type, employee_id)
-        VALUES (:id, :title, :message, :time, :read, :type, :employee_id)
-    """)
-    db.execute(query, {
-        "id": notif_id,
-        "title": title,
-        "message": message,
-        "time": "Just now",
-        "read": False,
-        "type": notif_type,
-        "employee_id": employee_id
-    })
-    db.commit()
+    try:
+        count = db.execute(text("SELECT COUNT(*) FROM notifications")).scalar() or 0
+        n = count + 1
+        while True:
+            notif_id = f"NT{str(n).zfill(3)}"
+            exists = db.execute(text("SELECT id FROM notifications WHERE id = :id"), {"id": notif_id}).first()
+            if not exists:
+                break
+            n += 1
+        
+        query = text("""
+            INSERT INTO notifications (id, title, message, time, read, type, employee_id)
+            VALUES (:id, :title, :message, :time, :read, :type, :employee_id)
+        """)
+        db.execute(query, {
+            "id": notif_id,
+            "title": title,
+            "message": message,
+            "time": "Just now",
+            "read": False,
+            "type": notif_type,
+            "employee_id": employee_id
+        })
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[Notification Service Warning] Failed to create notification: {e}")
+
 
 
 # --- EMPLOYEE SERVICES ---
@@ -474,12 +484,20 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
         n += 1
     req_date = datetime.now().strftime("%d %b %Y, %I:%M %p")
     
+    # Safely validate asset_id against assets table
+    raw_asset_id = rep_data.get("asset_id")
+    valid_asset_id = None
+    if raw_asset_id:
+        asset_exists = db.execute(text("SELECT id FROM assets WHERE id = :id"), {"id": raw_asset_id}).first()
+        if asset_exists:
+            valid_asset_id = raw_asset_id
+    
     db.execute(text("""
         INSERT INTO repairs (id, asset_id, reported_by, issue, description, request_date, priority, assigned_to, estimated_completion, status)
         VALUES (:id, :asset_id, :reported_by, :issue, :description, :request_date, :priority, :assigned_to, :est_completion, :status)
     """), {
         "id": rep_id,
-        "asset_id": rep_data["asset_id"],
+        "asset_id": valid_asset_id,
         "reported_by": rep_data["reported_by"],
         "issue": rep_data["issue"],
         "description": rep_data.get("description") or f"Reported fault: {rep_data['issue']}",
@@ -500,20 +518,22 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
         "message": "Repair request created."
     })
     
-    # Update asset status to Under Repair only if not a new asset request
-    if rep_data.get("asset_id") and not str(rep_data.get("issue", "")).startswith("New Asset Request"):
-        db.execute(text("UPDATE assets SET status = 'Under Repair' WHERE id = :asset_id"), {"asset_id": rep_data["asset_id"]})
+    # Update asset status to Under Repair only if valid asset exists and not a new asset request
+    if valid_asset_id and not str(rep_data.get("issue", "")).startswith("New Asset Request"):
+        db.execute(text("UPDATE assets SET status = 'Under Repair' WHERE id = :asset_id"), {"asset_id": valid_asset_id})
     
     db.commit()
-    log_activity(db, operator_name, "Create Repair", f"Created repair request {rep_id} for asset {rep_data['asset_id']}")
+    log_activity(db, operator_name, "Create Repair", f"Created repair request {rep_id} for asset {valid_asset_id or 'General Request'}")
     
-    if str(rep_data.get("issue", "")).startswith("New Asset Request"):
+    is_new_asset = str(rep_data.get("issue", "")).startswith("New Asset Request")
+    if is_new_asset:
         notif_title = "New IT Equipment Ticket Raised"
         notif_msg = f"New Ticket {rep_id} raised by {operator_name}: '{rep_data['issue']}'"
     else:
         notif_title = "New Support Ticket Raised"
-        notif_msg = f"Ticket {rep_id} raised by {operator_name} for asset {rep_data['asset_id']}: '{rep_data['issue']}'"
+        notif_msg = f"Ticket {rep_id} raised by {operator_name} for asset {valid_asset_id or 'N/A'}: '{rep_data['issue']}'"
 
+    # Create Broadcast Notification for Admin (employee_id = None)
     create_notification(
         db,
         notif_title,
@@ -521,6 +541,61 @@ def create_repair(db: Session, rep_data: dict, operator_name: str):
         "warning",
         None
     )
+
+    # Trigger Email Dispatch Asynchronously
+    try:
+        from services.email_service import send_email_async
+        from app.config import settings
+        admin_email = getattr(settings, "SMTP_USER", "helloquad05@gmail.com")
+        email_subject = f"[QITS Ticket {rep_id}] {notif_title}"
+        email_body = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+            <div style="background-color: #0f172a; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+              <h2 style="margin:0;">QITS IT Asset Management Desk</h2>
+            </div>
+            <div style="padding: 20px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+              <h3 style="color: #2563eb;">{notif_title}</h3>
+              <p><strong>Ticket ID:</strong> {rep_id}</p>
+              <p><strong>Raised By:</strong> {operator_name} (Employee ID: {rep_data['reported_by']})</p>
+              <p><strong>Issue / Item:</strong> {rep_data['issue']}</p>
+              <p><strong>Priority:</strong> {rep_data.get('priority', 'Medium')}</p>
+              <p><strong>Description:</strong> {rep_data.get('description', 'N/A')}</p>
+              <p><strong>Request Date:</strong> {req_date}</p>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+              <p style="font-size: 12px; color: #64748b;">This is an automated notification from Quadrant IT Services Management System.</p>
+            </div>
+          </body>
+        </html>
+        """
+        send_email_async(admin_email, email_subject, email_body)
+
+        # Also send confirmation email to Employee if email exists
+        emp = db.execute(text("SELECT email FROM employees WHERE id = :id"), {"id": rep_data['reported_by']}).first()
+        if emp and emp.email and emp.email != admin_email:
+            emp_subject = f"[QITS Ticket {rep_id}] Ticket Submitted Successfully"
+            emp_body = f"""
+            <html>
+              <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                <div style="background-color: #0f172a; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                  <h2 style="margin:0;">Quadrant IT Support Desk</h2>
+                </div>
+                <div style="padding: 20px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+                  <h3 style="color: #16a34a;">Ticket Submission Received</h3>
+                  <p>Hello {operator_name},</p>
+                  <p>Your support request (Ticket ID: <strong>{rep_id}</strong>) has been successfully logged. Our IT Support team has been notified and will review your request shortly.</p>
+                  <p><strong>Summary:</strong> {rep_data['issue']}</p>
+                  <p><strong>Status:</strong> In Progress / Awaiting Review</p>
+                  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                  <p style="font-size: 12px; color: #64748b;">Quadrant IT Services Asset Management System</p>
+                </div>
+              </body>
+            </html>
+            """
+            send_email_async(emp.email, emp_subject, emp_body)
+    except Exception as email_err:
+        print(f"[Email Dispatch Warning] {email_err}")
+
     return get_repair_by_id(db, rep_id)
 
 def add_repair_update_service(db: Session, rep_id: str, status: str, message: str, operator_name: str):
