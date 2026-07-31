@@ -11,10 +11,10 @@ class Settings(BaseSettings):
     
     # SMTP Email Configuration
     SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
+    SMTP_PORT: int = 465
     SMTP_USER: str = "helloquad05@gmail.com"
-    SMTP_PASSWORD: str = "helloquad05"
-    SMTP_FROM_EMAIL: str = "noreply@qits.com"
+    SMTP_PASSWORD: str = "phhbvrlgoxhrwgnq"
+    SMTP_FROM_EMAIL: str = "helloquad05@gmail.com"
     EMAILS_ENABLED: bool = True
 
     @property

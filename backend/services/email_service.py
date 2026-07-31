@@ -16,7 +16,7 @@ def send_email(to_email: str, subject: str, body_html: str) -> bool:
     smtp_user = getattr(settings, "SMTP_USER", "")
     smtp_password = getattr(settings, "SMTP_PASSWORD", "")
     smtp_host = getattr(settings, "SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(getattr(settings, "SMTP_PORT", 587))
+    smtp_port = int(getattr(settings, "SMTP_PORT", 465))
     from_email = getattr(settings, "SMTP_FROM_EMAIL", "") or smtp_user
 
     if not smtp_user or not smtp_password:
