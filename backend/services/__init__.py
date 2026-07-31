@@ -1,5 +1,4 @@
 from .auth_service import verify_password, get_password_hash, create_access_token, decode_access_token
-from .email_service import send_email, send_email_async
 from .db_services import (
     log_activity, create_notification,
     get_employees, get_employee_by_id, get_employee_by_username_or_email, create_employee, update_employee, delete_employee, change_employee_password,
@@ -12,4 +11,3 @@ from .db_services import (
     get_notifications, mark_notification_read, mark_all_notifications_read,
     get_activities
 )
-

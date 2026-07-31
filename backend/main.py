@@ -38,16 +38,9 @@ app.add_middleware(
 # Startup Event for Seeding Database
 @app.on_event("startup")
 def startup_event():
-    # Make sure connection works, run migrations and seeding
+    # Make sure connection works and run seeding
     db = SessionLocal()
     try:
-        # Migration: ensure asset_id in repairs table is nullable for new asset requests
-        try:
-            db.execute(text("ALTER TABLE repairs ALTER COLUMN asset_id DROP NOT NULL;"))
-            db.commit()
-        except Exception:
-            db.rollback()
-
         seed_database(db)
     except Exception as e:
         print(f"Error seeding database during startup: {e}")
@@ -68,7 +61,6 @@ app.include_router(activity_router)
 app.include_router(dashboard_router)
 
 from fastapi.encoders import jsonable_encoder
-import traceback
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
@@ -93,17 +85,6 @@ async def validation_exception_handler(request, exc):
         content={"detail": detail_str, "errors": formatted_errors}
     )
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    print("Unhandled Exception Encountered:")
-    traceback.print_exc()
-    origin = request.headers.get("origin", "*")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Internal Server Error: {str(exc)}"},
-        headers={"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true"}
-    )
-
 @app.get("/")
 def read_root():
     return {
@@ -111,4 +92,3 @@ def read_root():
         "message": "IT Asset Management System Backend API is active",
         "database": "connected"
     }
-

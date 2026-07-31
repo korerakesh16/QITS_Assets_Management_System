@@ -6,7 +6,7 @@ class Repair(Base):
     __tablename__ = "repairs"
 
     id = Column(String(50), primary_key=True)
-    asset_id = Column(String(50), ForeignKey("assets.id", ondelete="CASCADE"), nullable=True)
+    asset_id = Column(String(50), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
     reported_by = Column(String(50), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     issue = Column(String(150), nullable=False)
     description = Column(Text)
