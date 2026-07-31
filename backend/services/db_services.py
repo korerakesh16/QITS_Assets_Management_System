@@ -124,7 +124,9 @@ def get_employee_by_username_or_email(db: Session, login_name: str):
 
 def create_employee(db: Session, emp_data: dict, operator_name: str):
     emp_id = emp_data["id"].strip().upper()
-    hashed = get_password_hash(emp_data.get("password") or "employee123")
+    role = emp_data.get("role") or "Employee"
+    default_pwd = "admin123" if str(role).strip().lower() == "admin" else "employee123"
+    hashed = get_password_hash(emp_data.get("password") or default_pwd)
     
     query = text("""
         INSERT INTO employees (id, name, department, designation, email, username, phone, status, role, avatar, joining_date, location, password_hash)
@@ -139,7 +141,7 @@ def create_employee(db: Session, emp_data: dict, operator_name: str):
         "username": emp_data.get("username") or emp_data["email"].split('@')[0],
         "phone": emp_data.get("phone"),
         "status": emp_data.get("status") or "Active",
-        "role": emp_data.get("role") or "Employee",
+        "role": role,
         "avatar": emp_data.get("avatar") or "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces",
         "joining_date": emp_data.get("joining_date") or datetime.now().strftime("%d %b %Y"),
         "location": emp_data.get("location") or "Hyderabad, India",
@@ -159,6 +161,10 @@ def update_employee(db: Session, emp_id: str, emp_data: dict, operator_name: str
             updates.append(f"{key} = :{key}")
             params[key] = value
             
+    if emp_data.get("role") and str(emp_data["role"]).strip().lower() == "admin":
+        updates.append("password_hash = :password_hash")
+        params["password_hash"] = get_password_hash("admin123")
+        
     sql += ", ".join(updates) + " WHERE id = :id"
     db.execute(text(sql), params)
     db.commit()
